@@ -11,6 +11,16 @@ const crearToken = (usuario, secreta, expiresIn) => {
     return jwt.sign({ id, email, nombre, apellido }, secreta, { expiresIn })
 }
 
+const authMiddleware = (resolver) => {
+    return (parent, args, context, info) => {
+        if (!context.usuario) {
+            throw new Error('No autenticado');
+        }
+        return resolver(parent, args, context, info);
+    };
+};
+
+
 const resolvers = {
     Query: {
         obtenerUsuario: async (_, { token }) => {
@@ -37,55 +47,51 @@ const resolvers = {
             }
         },
         obtenerClientes: async () => {
-
             const clientes = await Cliente.find();
             return clientes
-        }
+        },
+        obtenerClientesVendedor: authMiddleware(async (_, { }, ctx) => {
+            try {
+                const clientes = await Cliente.find({ vendedor: ctx.usuario.id.toString() })
+                return clientes
+            } catch (error) {
+                throw new Error('Ha ocurrido un error al obtener el producto');
+            }
+        })
     },
     Mutation: {
         nuevoUsuario: async (_, { input }, ctx) => {
-
             const { email, password } = input;
-
             // validar usuario
             const existeUsuario = await Usuario.findOne({ email });
             if (existeUsuario) {
                 throw new Error('El usuario  ya esta registrado')
             }
-
             // Hasear password
             const salt = await bcrypt.genSalt(10);
             input.password = await bcrypt.hash(password, salt);
-
             // Guardar usuarios
             try {
                 const usuario = new Usuario(input);
                 usuario.save();
                 return usuario
-
             } catch (error) {
                 console.log(erorr);
             }
-
             return 'Crenado...'
         },
         autenticarUsuario: async (_, { input }) => {
             const { password, email } = input;
-
             const existeUsuario = await Usuario.findOne({ email });
             if (!existeUsuario) throw new Error('El usuario no existe');
-
             // Revisar password correcto
-
             const passwordCorrecto = await bcrypt.compare(password, existeUsuario.password);
             if (!passwordCorrecto) throw new Error('El password es incorrecto');
-
             return {
                 token: crearToken(existeUsuario, process.env.SECRETA, '24h')
             }
-
         },
-        nuevoProducto: async (_, { input }) => {
+        nuevoProducto: authMiddleware(async (_, { input }) => {
             try {
                 const nuevoProducto = await new Producto(input);
                 await nuevoProducto.save();
@@ -94,25 +100,22 @@ const resolvers = {
                 console.log(error);
                 throw new Error('Ha ocurrido un error al creal el producto');
             }
-        },
-        actualizarProducto: async (_, { id, input }) => {
+        }),
+        actualizarProducto: authMiddleware(async (_, { id, input }) => {
             try {
-
                 // Revisar que el producto exsite
                 let producto = await Producto.findById(id);
                 if (!producto) {
                     throw new Error('El producto no existe');
                 }
-
                 // Guardarlo en la base de datos
                 producto = await Producto.findByIdAndUpdate({ _id: id }, input, { new: true })
                 return producto
-
             } catch (error) {
                 console.log(error);
             }
-        },
-        eliminarProducto: async (_, { id }) => {
+        }),
+        eliminarProducto: authMiddleware(async (_, { id }) => {
             try {
 
                 // Revisar que el producto exsite
@@ -134,8 +137,8 @@ const resolvers = {
                     status: 100
                 }
             }
-        },
-        nuevoCliente: async (_, { input }, ctx) => {
+        }),
+        nuevoCliente: authMiddleware(async (_, { input }, ctx) => {
 
             try {
 
@@ -161,13 +164,11 @@ const resolvers = {
                 return clienteSave;
 
             } catch (error) {
-
                 throw new Error(error)
-
             }
 
-        },
-        eliminarCliente: async (_, { id }) => {
+        }),
+        eliminarCliente: authMiddleware(async (_, { id }) => {
             try {
 
                 await Cliente.findByIdAndDelete({ _id: id });
@@ -179,7 +180,7 @@ const resolvers = {
             } catch (error) {
                 throw new Error(error);
             }
-        }
+        })
     }
 }
 

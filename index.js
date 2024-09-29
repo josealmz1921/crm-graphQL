@@ -12,20 +12,18 @@ conectarDB();
 const server = new ApolloServer({
     typeDefs,
     resolvers,
-    context: ({req}) => {
-
+    context: ({ req }) => {
         const token = req.headers['authorization'] || '';
-        
-        if(token){
+        let usuario = null;
+        if (token) {
             try {
-                const usuario = jwt.verify(token,process.env.secreta)
-                return usuario
+                usuario = jwt.verify(token, process.env.SECRETA);
             } catch (error) {
-                console.log('Hubo un error');
-                throw new Error(error);
-            }            
+                throw new Error('Token inválido');
+            }
         }
-    }
+        return { usuario };
+    },
 });
 
 // Inicialiozar el serivodor
